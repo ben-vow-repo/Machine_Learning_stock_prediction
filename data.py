@@ -1,17 +1,38 @@
+import random
 class Stocks:
-    def __init__(self, id, chance_to_increase, chance_to_decrease):
+    def __init__(self, id, chance_to_increase, demand_sensitivity):
         self.id = id
         self.current_price = 25
         self.chance_to_increase = chance_to_increase
-        self.chance_to_decrease = chance_to_decrease
-        self.amount_left = 10000
+        self.demand_sensitivity = demand_sensitivity
+        self.amount_left = 100000
         self.price_history = []
         self.min_price = 10
         self.max_price = 40
         self.volatility = 0.2
+        self.shares_bought = 0
+        self.shares_sold = 0
 
-    def increase_price(self):
+    def direction_of_price(self):
+        net_demand = self.shares_bought-self.shares_sold
+        demand_ratio = net_demand/(self.shares_bought+self.shares_sold)
+        demand_adjustment = self.demand_sensitivity * demand_ratio
+        probability = self.chance_to_increase + demand_adjustment
+        increase_probability = max(0.05, min(0.95, probability))
+        if random.random() < increase_probability:
+            return True
+        else:
+            return False
+
+    def volatility(self):
         
+
+
+
+
+
+
+
 
 
 class Trader:
@@ -56,10 +77,12 @@ class Trader:
         amount_spendable = self.cash_balance*self.cash_spend_percentage
 
         if amount_spendable < stock.current_price:
-            return False:
+            return False
 
         quantity = int(amount_spendable / stock.current_price)
         self.cash_balance -= quantity*stock.current_price
+        stock.amount_left -= quantity
+        stock.shares_bought += quantity
         purchase = StocksBought(
             stock_id=stock.id,
             price_bought_at=stock.current_price,
@@ -69,7 +92,7 @@ class Trader:
         )
         self.portfolio.append(purchase)
         if market.current_day not in market.transaction_log:
-            market.transaction_log[market.curent_day] = {}
+            market.transaction_log[market.current_day] = {}
         if self.id not in market.transaction_log[market.current_day]:
             market.transaction_log[market.current_day][self.id] = []
         market.transaction_log[market.current_day][self.id].append({
