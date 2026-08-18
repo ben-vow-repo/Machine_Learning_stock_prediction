@@ -2,8 +2,11 @@
 using python to create a fake stock market of around 30 companies and 1000 fake traders to create an evolutionary process to define the best parameters for buying and selling stocks
 
 # CHANGES MADE
-* created data and main files
-* created constructor for the stocks
-* created constructor for the traders
-* created constructor for the stocks being bought
-* created constructor for the main market days 
+* EVERYTHING IS FUCKED
+* I AM NEVER USING AI AGAIN
+* THIS IS GOING TO TAKE SO LONG
+* KILL ME
+* methods made for changing volility
+* methods made for day to day loop
+* methods made for changing stock prices
+* I'm going to cry
