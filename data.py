@@ -1,4 +1,5 @@
 import random
+import statistics
 class Stocks:
     def __init__(self, id, chance_to_increase, demand_sensitivity):
         self.id = id
@@ -25,11 +26,11 @@ class Stocks:
             return False
 
     def volatility(self):
+        if len(self.price_history) < 2:
+            return 0.2
+        return statistics.stdev(self.price_history)
+
         
-
-
-
-
 
 
 
