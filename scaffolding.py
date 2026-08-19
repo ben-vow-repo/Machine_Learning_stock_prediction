@@ -1,5 +1,7 @@
+from __future__ import annotations
 import random
 import statistics
+
 class Stocks:
     def __init__(self, id, chance_to_increase, demand_sensitivity):
         self.id = id
@@ -13,6 +15,8 @@ class Stocks:
         self.volatility = 0.2
         self.shares_bought = 0
         self.shares_sold = 0
+        self.firm_max = 200
+        self.firm_min = 1
 
     def direction_of_price(self):
         net_demand = self.shares_bought-self.shares_sold
@@ -30,9 +34,27 @@ class Stocks:
 
     def volatility_change(self):
         if len(self.price_history) < 2:
-            return 0.2
-        return statistics.stdev(self.price_history)
+            self.volatility = 0.2
+            return self.volatility
+        self.volatility = min(100,round(statistics.stdev(self.price_history),2))
+        return self.volatility
+    
+    def stock_price_change(self, market: Market):
+        if self.direction_of_price():
+            change = self.current_price * random.uniform(0,0.4)
+            self.current_price = round((self.current_price + change),2)
+            self.current_price = min(self.current_price, self.firm_max )
 
+            if self.current_price > self.max_price:
+                self.max_price = self.current_price
+        else:
+            change = self.current_price * random.uniform(-0.4,0)
+            self.current_price = round(max(self.firm_min, (self.current_price + change)),2)
+            if self.current_price < self.min_price:
+                self.min_price = self.current_price
+            
+        market.stock_prices_over_time[market.current_day] = [market.all_stocks[self.id].current_price]
+        self.price_history.append(self.current_price)
 class Trader:
     def __init__(self, id ,minimum_buy_price, maximum_buy_price, minimum_sell_price, maximum_sell_price, risk_tolerance, cash_spend_percentage, total_sell_percentage, greediness):
         self.id = id
@@ -48,16 +70,18 @@ class Trader:
         self.total_sell_percentage = total_sell_percentage
         self.profit_loss = 0
         self.transaction_history = []
-        self.portfolio = []
+        self.portfolio = {}
         self.greediness = greediness
 
 
     def sell_stock(self, stock: Stocks , holding: StocksBought, market: Market):
-        """ defines whether or not a stock should be sold using the trader's min/max selling prices and the profit to be gained from the trade"""
+        """ defines whether or not a stock should be sold using the trader's min/max selling prices and the profit to be gained from the trade
+        then completes the sale"""
         if stock.current_price < self.minimum_sell_price or stock.current_price > self.maximum_sell_price:
             return False
-        current_value = stock.current_price*int(holding.quantity*self.total_sell_percentage)
-        original_cost = holding.price_bought_at*int(holding.quantity*self.self.total_sell_percentage)
+        selling_quantity = int(holding.quantity*self.total_sell_percentage)
+        current_value = stock.current_price* selling_quantity
+        original_cost = holding.price_bought_at* selling_quantity
         profit = current_value - original_cost
 
         if stock.current_price < stock.max_price*self.greediness or profit>0:
@@ -66,9 +90,24 @@ class Trader:
         self.cash_balance += current_value
         self.profit_loss += profit
 
-        stock.amount_left += int(holding.quantity*self.self.total_sell_percentage)
-        stock.shares_sold += int(holding.quantity*self.self.total_sell_percentage)
-        holding.quantity -= int(holding.quantity*self.self.total_sell_percentage)
+        stock.amount_left += selling_quantity
+        stock.shares_sold += selling_quantity
+        holding.quantity -= selling_quantity
+
+        if market.current_day not in market.transaction_log:
+            market.transaction_log[market.current_day] = {}
+        if self.id not in market.transaction_log[market.current_day]:
+            market.transaction_log[market.current_day][self.id] = []
+        market.transaction_log[market.current_day][self.id].append({
+            'trader_id': self.id,
+            'stock_id': stock.id,
+            'action': ' sell',
+            'price' : stock.current_price,
+            'total_quantity': selling_quantity,
+            'total_cost': selling_quantity*stock.current_price
+        })
+        
+        
 
 
 
@@ -96,7 +135,14 @@ class Trader:
             trader_id=self.id,
             day_bought=market.current_day
         )
-        self.portfolio.append(purchase)
+        if stock.id not in self.portfolio:
+            self.portfolio[stock.id] = purchase
+        else:
+            holding = self.portfolio[stock.id]
+            total_quantity = holding.quantity + quantity
+            holding.price_bought_at = ((holding.quantity * holding.price_bought_at) + 
+                                       (total_quantity*stock.current_price)) / total_quantity
+            holding.quantity = total_quantity
         if market.current_day not in market.transaction_log:
             market.transaction_log[market.current_day] = {}
         if self.id not in market.transaction_log[market.current_day]:
@@ -106,6 +152,7 @@ class Trader:
             'stock_id': stock.id,
             'action': ' buy',
             'price' : stock.current_price,
+            'total_quantity':quantity,
             'total_cost': quantity*stock.current_price
         })
         return True
@@ -133,31 +180,20 @@ class Market:
     def create_traders(self):
         for i in range(1000):
             self.all_traders.append(Trader(i, random.randint(0,15), random.randint(45,60), random.randint(0,15), random.randint(45,60), 
-                                           random.randint(0,100)/100, random.randint(0,45)/100, random.randint(0,100)/100, random.randint(0,100)/100 ))
+                                           random.randint(0,100), random.randint(0,45)/100, random.randint(0,100)/100, random.randint(0,100)/100 ))
 
     def create_stocks(self):
         for i in range(30):
             self.all_stocks.append(Stocks(i, random.randint(25,75)/100, random.randint(0,25)/100))
             self.stock_prices_over_time[0] = [self.all_stocks[i].current_price]
 
-    def new_day(self, stock: Stocks):
+    def new_day(self):
         self.current_day += 1
-        stock.shares_bought = 0
-        stock.shares_sold = 0
+        for i in range(len(self.all_stocks)):
+            current_stock = self.all_stocks[i]
+            current_stock.shares_bought = 0
+            current_stock.shares_sold = 0
 
-    def stock_price_change(self, stock: Stocks):
-        if stock.direction_of_price():
-            change = stock.current_price * random.uniform(0,0.4)
-            stock.current_price = stock.current_price + change
-            if stock.current_price > stock.max_price:
-                stock.max_price = stock.current_price
-        else:
-            change = stock.current_price * random.uniform(-0.4,0)
-            stock.current_price = max(1, stock.current_price + change)
-            if stock.current_price < stock.min_price:
-                stock.min_price = stock.current_price
-            
-        self.stock_prices_over_time[self.current_day] = [self.all_stocks[stock.id].current_price]
-        stock.price_history.append(stock.current_price)
+
 
 
