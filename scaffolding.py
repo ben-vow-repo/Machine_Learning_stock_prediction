@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 import statistics
+import math
 
 class Stocks:
     def __init__(self, id, chance_to_increase, demand_sensitivity):
@@ -81,19 +82,26 @@ class Trader:
         if stock.current_price < self.minimum_sell_price or stock.current_price > self.maximum_sell_price:
             return False
         selling_quantity = int(holding.quantity*self.total_sell_percentage)
-        current_value = stock.current_price* selling_quantity
-        original_cost = holding.price_bought_at* selling_quantity
+        current_value = round(stock.current_price* selling_quantity, 2)
+        original_cost = round(holding.price_bought_at* selling_quantity, 2)
         profit = current_value - original_cost
 
         if stock.current_price < stock.max_price*self.greediness or profit<0:
             return False
+        
+        if stock.volatility>0:
+            working_volatility = int(float(str(stock.volatility)[:2]))
 
+        if working_volatility > self.risk_tolerance:
+            return False
+        
         self.cash_balance += current_value
         self.profit_loss += profit
 
         stock.amount_left += selling_quantity
         stock.shares_sold += selling_quantity
         holding.quantity -= selling_quantity
+        self.portfolio_value -= current_value
 
         if market.current_day not in market.transaction_log:
             market.transaction_log[market.current_day] = {}
@@ -123,7 +131,12 @@ class Trader:
 
         if amount_spendable < stock.current_price:
             return False
-
+        if (
+            not math.isfinite(self.cash_balance)
+            or not math.isfinite(amount_spendable)
+            or stock.current_price <= 0
+        ):
+            return False
         quantity = int(amount_spendable / stock.current_price)
         self.cash_balance -= quantity*stock.current_price
         self.portfolio_value += quantity*stock.current_price
@@ -183,10 +196,11 @@ class Market:
 
     def create_traders(self):
         for i in range(1000):
-            self.all_traders.append(Trader(i, random.randint(0,15), random.randint(45,60), random.randint(0,15), random.randint(45,60), 
+            self.all_traders.append(Trader(i, random.randint(0,100), random.randint(100,200), random.randint(0,100), random.randint(100,200), 
                                            random.randint(0,100), random.randint(0,45)/100, random.randint(0,100)/100, random.randint(0,100)/100 ))
 
     def create_stocks(self):
+        self.all_stocks.clear()
         for i in range(30):
             self.all_stocks.append(Stocks(i, random.randint(25,75)/100, random.randint(0,25)/100))
             self.stock_prices_over_time[0] = [self.all_stocks[i].current_price]
@@ -195,20 +209,52 @@ class Market:
         self.current_day += 1
         for i in range(len(self.all_stocks)):
             current_stock = self.all_stocks[i]
+            current_stock.stock_price_change(self)
             current_stock.shares_bought = 0
             current_stock.shares_sold = 0
 
     def final_worth(self):
         for i in range(len(self.all_traders)):
-            self.all_traders[i].full_profit += self.all_traders[i].portfolio_value 
-            + self.all_traders[i].profit_loss + self.all_traders[i].cash_balance
+            self.all_traders[i].full_profit += (round(self.all_traders[i].portfolio_value, 2) 
+            + round(self.all_traders[i].profit_loss, 2) + round(self.all_traders[i].cash_balance, 2))
 
     def evolution_sort(self):
         self.ranked_traders = sorted(self.all_traders, 
-                                     key = lambda trader: trader.profit_loss, reverse=True)
+                                     key = lambda trader: trader.full_profit, reverse=True)
 
     def mutate(self):
-        del self.ranked_traders[200: 999]
+        del self.ranked_traders[200:]
+        self.all_traders.clear()
+        for i in range(1000):
+            parent_trader = self.ranked_traders[random.randint(0,199)]
+            new_min_buy = max(0, min(100, random.randint(parent_trader.minimum_buy_price-5, parent_trader.minimum_buy_price+5)))
+            new_max_buy = max(100, min(200, random.randint(parent_trader.maximum_buy_price-5, parent_trader.maximum_buy_price+5)))
+            new_min_sell = max(0, min(100, random.randint(parent_trader.minimum_sell_price-5, parent_trader.minimum_sell_price+5)))
+            new_max_sell = max(100, min(200, random.randint(parent_trader.maximum_sell_price-5, parent_trader.maximum_sell_price+5)))
+            new_risk_tolerance = max(0, min(100, random.randint(int((parent_trader.risk_tolerance*100)-15),int((parent_trader.risk_tolerance*100)+15))))/100
+            new_cash_spend_percentage = max(0, min(100, random.randint(int((parent_trader.cash_spend_percentage*100)-15),int((parent_trader.cash_spend_percentage*100)+15))))/100
+            new_total_sell_percentage = max(0, min(100, random.randint(int((parent_trader.total_sell_percentage*100)-15),int((parent_trader.total_sell_percentage*100)+15))))/100
+            new_greediness = max(0, min(100, random.randint(int((parent_trader.greediness*100)-15),int((parent_trader.greediness*100)+15))))/100
+            self.all_traders.append(Trader(i, new_min_buy, new_max_buy, new_min_sell, new_max_sell, new_risk_tolerance, new_cash_spend_percentage, new_total_sell_percentage, new_greediness))
+
+    def new_generation(self):
+        self.final_worth()
+        self.ranked_traders.clear()
+        self.evolution_sort()
+        self.mutate()
+        self.all_stocks.clear()
+        self.create_stocks()
+        self.stock_prices_over_time.clear()
+        self.transaction_log.clear()
+        self.current_day = 0
+        top_trader = self.ranked_traders[0]
+        print("GENERATION ROUNDUP\n" +
+        "--------------------\n" +
+        "Top final worth - " + str(round(top_trader.full_profit, 2)) +
+        "\nPortfolio size - " + str(len(top_trader.portfolio)) +
+        "\nProfit loss - " + str(round(top_trader.profit_loss, 2)) +
+        "\nCash balance - " + str(round(top_trader.cash_balance, 2))
+        )
 
 
 
