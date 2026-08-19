@@ -72,6 +72,7 @@ class Trader:
         self.transaction_history = []
         self.portfolio = {}
         self.greediness = greediness
+        self.full_profit = 0
 
 
     def sell_stock(self, stock: Stocks , holding: StocksBought, market: Market):
@@ -84,7 +85,7 @@ class Trader:
         original_cost = holding.price_bought_at* selling_quantity
         profit = current_value - original_cost
 
-        if stock.current_price < stock.max_price*self.greediness or profit>0:
+        if stock.current_price < stock.max_price*self.greediness or profit<0:
             return False
 
         self.cash_balance += current_value
@@ -137,12 +138,14 @@ class Trader:
         )
         if stock.id not in self.portfolio:
             self.portfolio[stock.id] = purchase
+            total_quantity = quantity
         else:
             holding = self.portfolio[stock.id]
             total_quantity = holding.quantity + quantity
             holding.price_bought_at = ((holding.quantity * holding.price_bought_at) + 
-                                       (total_quantity*stock.current_price)) / total_quantity
+                                       (quantity*stock.current_price)) / total_quantity
             holding.quantity = total_quantity
+        
         if market.current_day not in market.transaction_log:
             market.transaction_log[market.current_day] = {}
         if self.id not in market.transaction_log[market.current_day]:
@@ -152,8 +155,8 @@ class Trader:
             'stock_id': stock.id,
             'action': ' buy',
             'price' : stock.current_price,
-            'total_quantity':quantity,
-            'total_cost': quantity*stock.current_price
+            'total_quantity':total_quantity,
+            'total_cost': total_quantity*stock.current_price
         })
         return True
 
@@ -176,6 +179,7 @@ class Market:
         self.all_traders = []
         self.transaction_log = {}
         self.stock_prices_over_time = {}
+        self.ranked_traders = []
 
     def create_traders(self):
         for i in range(1000):
@@ -193,6 +197,18 @@ class Market:
             current_stock = self.all_stocks[i]
             current_stock.shares_bought = 0
             current_stock.shares_sold = 0
+
+    def final_worth(self):
+        for i in range(len(self.all_traders)):
+            self.all_traders[i].full_profit += self.all_traders[i].portfolio_value 
+            + self.all_traders[i].profit_loss + self.all_traders[i].cash_balance
+
+    def evolution_sort(self):
+        self.ranked_traders = sorted(self.all_traders, 
+                                     key = lambda trader: trader.profit_loss, reverse=True)
+
+    def mutate(self):
+        del self.ranked_traders[200: 999]
 
 
 
