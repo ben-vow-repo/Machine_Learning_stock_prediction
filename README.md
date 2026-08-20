@@ -9,3 +9,4 @@ FINISHED
 * outside loop controls amount of generations
 * second outermost loop controls number of days in each generation
 * terminal receives main stats from top trader in each generation
+* made more readable and changable, no more magic numbers

@@ -11,15 +11,17 @@ class Stocks:
         self.demand_sensitivity = demand_sensitivity
         self.amount_left = 100000
         self.price_history = []
-        self.min_price = 10
-        self.max_price = 40
-        self.volatility = 0.2
+        self.min_price = 10 # historial minimum for the stock, gives a suggested limit for the traders when to buy and sell
+        self.max_price = 40 # historical maximum for the stock, gives a suggested limit for the traders when to buy and sell
+        self.volatility = 0.2 # standard deviation of the stock price in history to show how likely the price is to change drastically
         self.shares_bought = 0
         self.shares_sold = 0
-        self.firm_max = 200
-        self.firm_min = 1
+        self.firm_max = 200 # actual maximum for the stock price to reach
+        self.firm_min = 1 # actual minimum for the stock price
 
     def direction_of_price(self):
+        """decides the direction that the price will move using the chance of the stock increasing/decreasing and the current demand of the stock
+        DOES NOT MOVE THE STOCK PRICE ITSELF, JUST A HELPER"""
         net_demand = self.shares_bought-self.shares_sold
         if self.shares_bought > 0 or self.shares_sold > 0:
             demand_ratio = net_demand/(self.shares_bought+self.shares_sold)
@@ -34,6 +36,8 @@ class Stocks:
             return False
 
     def volatility_change(self):
+        """takes the standard deviation of the prices in the stock's history and applies it to the volatility, when price history
+        too short for the stdev method it is auto applied to be 0.2"""
         if len(self.price_history) < 2:
             self.volatility = 0.2
             return self.volatility
@@ -41,6 +45,8 @@ class Stocks:
         return self.volatility
     
     def stock_price_change(self, market: Market):
+        """uses direction_of_price helper method to decide direction, randomly generates an amount to change the price
+        of the stock by a random amount in a random range of the current value"""
         if self.direction_of_price():
             change = self.current_price * random.uniform(0,0.4)
             self.current_price = round((self.current_price + change),2)
@@ -62,17 +68,17 @@ class Trader:
         self.cash_balance = 1000
         self.starting_balance = 1000
         self.portfolio_value = 0
-        self.minimum_buy_price = minimum_buy_price
-        self.maximum_buy_price = maximum_buy_price
-        self.minimum_sell_price = minimum_sell_price
-        self.maximum_sell_price = maximum_sell_price
-        self.risk_tolerance = risk_tolerance
-        self.cash_spend_percentage = cash_spend_percentage
-        self.total_sell_percentage = total_sell_percentage
+        self.minimum_buy_price = minimum_buy_price # minimum price that the trader will buy at
+        self.maximum_buy_price = maximum_buy_price # maximum price that the trader will buy at
+        self.minimum_sell_price = minimum_sell_price # minimum price that the trader will sell at
+        self.maximum_sell_price = maximum_sell_price # maxmimum price that the trader will sell at
+        self.risk_tolerance = risk_tolerance # level of volatility that the trader will buy below
+        self.cash_spend_percentage = cash_spend_percentage # percentage of trader's total balance that they are willing to spend on one buy
+        self.total_sell_percentage = total_sell_percentage # percentage of trader's holdings of a stock that the trader is willing to sell at once
         self.profit_loss = 0
         self.transaction_history = []
         self.portfolio = {}
-        self.greediness = greediness
+        self.greediness = greediness # how close to the historical maximum price of a stock that the trader will sell at
         self.full_profit = 0
 
 
@@ -88,7 +94,10 @@ class Trader:
 
         if stock.current_price < stock.max_price*self.greediness or profit<0:
             return False
-        
+
+        if stock.volatility>99:
+            working_volatility = stock.volatility%100
+
         if stock.volatility>0:
             working_volatility = int(float(str(stock.volatility)[:2]))
 
@@ -124,7 +133,11 @@ class Trader:
         """defines whether or not a stock should be bought using the trader's min/max selling price and the risk of purchasing the stock"""
         if stock.current_price < self.minimum_buy_price or stock.current_price > self.maximum_buy_price:
             return False
-        if stock.volatility > self.risk_tolerance:
+
+        if stock.volatility>0:
+            working_volatility = int(float(str(stock.volatility)[:2]))
+
+        if working_volatility > self.risk_tolerance:
             return False
 
         amount_spendable = self.cash_balance*self.cash_spend_percentage
@@ -194,18 +207,21 @@ class Market:
         self.stock_prices_over_time = {}
         self.ranked_traders = []
 
-    def create_traders(self):
-        for i in range(1000):
+    def create_traders(self, amount_of_traders: int):
+        """creates all base traders for the first generation"""
+        for i in range(amount_of_traders):
             self.all_traders.append(Trader(i, random.randint(0,100), random.randint(100,200), random.randint(0,100), random.randint(100,200), 
                                            random.randint(0,100), random.randint(0,45)/100, random.randint(0,100)/100, random.randint(0,100)/100 ))
 
-    def create_stocks(self):
+    def create_stocks(self, amount_of_stocks: int):
+        """creates all stocks for each new generation"""
         self.all_stocks.clear()
-        for i in range(30):
+        for i in range(amount_of_stocks):
             self.all_stocks.append(Stocks(i, random.randint(25,75)/100, random.randint(0,25)/100))
             self.stock_prices_over_time[0] = [self.all_stocks[i].current_price]
 
     def new_day(self):
+        """moves day counter by one, resets stock stats, creates a new stock price"""
         self.current_day += 1
         for i in range(len(self.all_stocks)):
             current_stock = self.all_stocks[i]
@@ -214,18 +230,21 @@ class Market:
             current_stock.shares_sold = 0
 
     def final_worth(self):
+        """gets the final value of each trader to sort by"""
         for i in range(len(self.all_traders)):
             self.all_traders[i].full_profit += (round(self.all_traders[i].portfolio_value, 2) 
             + round(self.all_traders[i].profit_loss, 2) + round(self.all_traders[i].cash_balance, 2))
 
     def evolution_sort(self):
+        """sorts all traders by full profit"""
         self.ranked_traders = sorted(self.all_traders, 
                                      key = lambda trader: trader.full_profit, reverse=True)
 
-    def mutate(self):
-        del self.ranked_traders[200:]
+    def mutate(self, amount_of_traders: int):
+        """randomises a new generation based on the top 20% of the traders in the previous generation with it staying in a close range to the parent stat"""
+        del self.ranked_traders[int(len(self.all_traders)*0.2):]
         self.all_traders.clear()
-        for i in range(1000):
+        for i in range(amount_of_traders):
             parent_trader = self.ranked_traders[random.randint(0,199)]
             new_min_buy = max(0, min(100, random.randint(parent_trader.minimum_buy_price-5, parent_trader.minimum_buy_price+5)))
             new_max_buy = max(100, min(200, random.randint(parent_trader.maximum_buy_price-5, parent_trader.maximum_buy_price+5)))
@@ -237,13 +256,14 @@ class Market:
             new_greediness = max(0, min(100, random.randint(int((parent_trader.greediness*100)-15),int((parent_trader.greediness*100)+15))))/100
             self.all_traders.append(Trader(i, new_min_buy, new_max_buy, new_min_sell, new_max_sell, new_risk_tolerance, new_cash_spend_percentage, new_total_sell_percentage, new_greediness))
 
-    def new_generation(self):
+    def new_generation(self, amount_of_traders:int, amount_of_stocks:int):
+        """creates a new generation of traders and stocks"""
         self.final_worth()
         self.ranked_traders.clear()
         self.evolution_sort()
-        self.mutate()
+        self.mutate(amount_of_traders)
         self.all_stocks.clear()
-        self.create_stocks()
+        self.create_stocks(amount_of_stocks)
         self.stock_prices_over_time.clear()
         self.transaction_log.clear()
         self.current_day = 0

@@ -1,8 +1,10 @@
 import scaffolding as s
 
+amount_of_traders = 1000
+amount_of_stocks = 30
 global_counter = s.Market()
-global_counter.create_stocks()
-global_counter.create_traders()
+global_counter.create_stocks(amount_of_stocks)
+global_counter.create_traders(amount_of_traders)
 
 for g in range(10):
     for i in range(100):
@@ -18,7 +20,7 @@ for g in range(10):
                                                         global_counter.all_traders[t].portfolio[current_stock.id], global_counter)
                 else:
                     continue
-    global_counter.new_generation()
+    global_counter.new_generation(amount_of_traders, amount_of_stocks)
 
 print(global_counter.ranked_traders[0].full_profit)
 
